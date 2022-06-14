@@ -1,0 +1,4 @@
+
+
+Wishful thinking:
+1. What is the minimal set size for HMM to learn?
