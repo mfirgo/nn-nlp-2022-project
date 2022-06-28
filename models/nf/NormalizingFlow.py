@@ -57,13 +57,16 @@ class Flow(nn.Module):
 
 class NormalizingFlow(nn.Module):
 
-    def __init__(self, dim, blocks, flow_length, base_distrib, device):
+    def __init__(self, dim, blocks, flow_length, base_distrib, device, n_hidden = 128, n_layers = 3):
         super().__init__()
         self.device = device
         biject = []
         for f in range(flow_length):
             for b_flow in blocks:
-                biject.append(b_flow(dim, self.device))
+                if b_flow is CouplingFlow:
+                    biject.append(b_flow(dim, self.device, n_hidden=n_hidden, n_layers=n_layers))
+                else:
+                    biject.append(b_flow(dim, self.device))
         # self.transforms = transform.ComposeTransform(biject)
         self.bijectors = nn.ModuleList(biject)
         self.base_distrib = base_distrib
@@ -180,7 +183,7 @@ def nll_loss(y, log_det_jacob, base_distrib):
     log_likelihood = base_distrib.log_prob(y) + log_det_jacob
     return -torch.mean(log_likelihood)
 
-def train_flow(flow, data_loader, loss, optimizer, scheduler, device, epochs=10001, plot_it=1000, batch_size = 64):
+def train_flow(flow, data_loader, loss, optimizer, scheduler, device, epochs=10001, plot_it=1000, batch_size = 128, plot_sample = 500):
     base_distrib = flow.base_distrib
     flow.to(device)
     # ims = []
@@ -194,7 +197,7 @@ def train_flow(flow, data_loader, loss, optimizer, scheduler, device, epochs=100
     # plt.title('Target density', fontsize=15);
     # Main optimization loop
     for epoch in range(epochs):
-        if epoch % 10 == 0:
+        if epoch % plot_it == 0:
             print(f"Training epoch {epoch + 1} ...")
         loss_acc = 0.0
         flow.train()
@@ -212,10 +215,10 @@ def train_flow(flow, data_loader, loss, optimizer, scheduler, device, epochs=100
             # Gather data and report
             # loss_acc += loss_n.item() * len(batch)
 
-        if epoch % 10 == 0:
+        if epoch % plot_it == 0:
             flow.eval()
             with torch.no_grad():
-                z = base_distrib.sample((1000,))
+                z = base_distrib.sample((plot_sample,))
                 x = flow.invert(z).cpu()
                 plt.scatter(x[:, 0], x[:, 1])
                 plt.xlim(-5, 5)
@@ -242,10 +245,10 @@ class MoonDataset(torch.utils.data.Dataset):
         return self.lenght
 
     def __getitem__(self, index):
-        t = torch.tensor(self.moons[index], device = device)
+        t = torch.tensor(self.moons[index], device = self.device)
         return (t)
         
-my_moons = MoonDataset(device, 5000)
+## my_moons = MoonDataset(device, 5000)
 
-moons_dataloader = torch.utils.data.DataLoader(my_moons, batch_size=batch_size,
-                        shuffle=False)
+## moons_dataloader = torch.utils.data.DataLoader(my_moons, batch_size=batch_size,
+##                        shuffle=False)
